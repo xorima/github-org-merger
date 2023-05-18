@@ -2,119 +2,328 @@ package merger
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github-org-merger/internal/config"
+
 	"github.com/google/go-github/v50/github"
+	"github.com/youshy/logger"
+	"go.uber.org/zap"
 )
 
+type OrganisationInformation struct {
+	Organisation Organisation
+	Repositories []Repository
+	SeenTeams    []Team
+}
+
+// Organisation represents a github Organisation
+// While an org has teams I believe it is better
+// to capture this data at repo level and then only
+// target the teams that are actually in use as opposed
+// to all teams arbitrarily
+type Organisation struct {
+	Name        string
+	Description string
+	URL         string
+	Email       string
+	Members     []Member
+}
+type Member struct {
+	Login string
+	Email string
+}
+type Team struct {
+	Name        string
+	Description string
+	URL         string
+	Parent      string
+}
+type Repository struct {
+	Name          string
+	Description   string
+	URL           string
+	Private       bool
+	Teams         []Team
+	Collaborators []Member
+	Contributors  []Member
+	PushedAt      string
+}
+
 type Handler struct {
-	config *config.Config
-	client *github.Client
+	config    *config.Config
+	client    *github.Client
+	teamCache map[string]Team
+	log       *zap.SugaredLogger
 }
 
 func NewHandler(config *config.Config) *Handler {
+
+	log := logger.NewLogger(logger.DEBUG, false)
+
 	return &Handler{
-		config: config,
-		client: NewGithubClientPAT(context.Background(), config.GithubToken),
+		config:    config,
+		client:    NewGithubClientPAT(context.Background(), config.GithubToken),
+		teamCache: make(map[string]Team),
+		log:       log,
 	}
+
 }
 
 func (h *Handler) Handle() {
-	fmt.Printf("Running on Org: %s\n", config.AppConfig.SourceOrg.Name)
-	h.orgDetails()
+	h.log.Debugf("Running on Org: %s", h.config.SourceOrg.Name)
+	var orgInfo OrganisationInformation
+	h.log.Debugf("Gathering Org Details")
+	org, err := h.orgDetails()
+	if err != nil {
+		panic(err)
+	}
+	orgInfo.Organisation = org
+	h.log.Debugf("Gathering Repo Details")
+	repos, err := h.orgRepos()
+	if err != nil {
+		panic(err)
+	}
+	orgInfo.Repositories = repos
+
+	// TODO: Add teams
+	var teams []Team
+	for _, v := range h.teamCache {
+		teams = append(teams, v)
+	}
+
+	orgInfo.SeenTeams = teams
+	h.printJson(orgInfo)
 }
 
-func (h *Handler) orgDetails() error {
+func (h *Handler) printJson(orgInfo OrganisationInformation) {
+	h.log.Debugf("Printing JSON to screen")
+	// convert to json
+	j, err := json.Marshal(orgInfo)
+	if err != nil {
+		panic(err)
+	}
+	// print json
+	fmt.Println(string(j))
+}
+
+func (h *Handler) githubListOptsDefaults() github.ListOptions {
+	return github.ListOptions{PerPage: 100}
+}
+
+func (h *Handler) orgDetails() (Organisation, error) {
+	var organisation Organisation
+
 	// Connect to git
 	org, _, err := h.client.Organizations.Get(context.Background(), h.config.SourceOrg.Name)
 	if err != nil {
-		return err
+		return organisation, err
 	}
-	fmt.Println(org.GetName())
-	fmt.Println(org.GetDescription())
-	fmt.Println(org.GetURL())
-	fmt.Println(org.GetEmail())
+	organisation = Organisation{
+		Name:        org.GetName(),
+		Description: org.GetDescription(),
+		URL:         org.GetURL(),
+		Email:       org.GetEmail(),
+	}
 
-	h.repoDetails()
-	return h.teamDetails()
+	orgMembers, err := h.orgMembers()
+	if err != nil {
+		return organisation, err
+	}
+	organisation.Members = orgMembers
+	return organisation, nil
 }
 
-func (h *Handler) teamDetails() error {
-	teams, _, err := h.client.Teams.ListTeams(context.Background(), h.config.SourceOrg.Name, nil)
-	if err != nil {
-		return err
+func (h *Handler) orgMembers() ([]Member, error) {
+	h.log.Debugf("Gathering Org Members")
+	opts := &github.ListMembersOptions{
+		ListOptions: h.githubListOptsDefaults(),
 	}
-	for _, team := range teams {
-		fmt.Println(team.GetName())
-		fmt.Println(team.GetDescription())
-		fmt.Println(team.GetURL())
-		fmt.Println(team.GetPermissions())
-		fmt.Println(team.GetParent())
+	page := 1
+	var allMembers []Member
+	for {
+		opts.Page = page
+		members, resp, err := h.client.Organizations.ListMembers(context.Background(), h.config.SourceOrg.Name, opts)
+		if err != nil {
+			return nil, err
+		}
+		for _, member := range members {
+			allMembers = append(allMembers, Member{
+				Login: member.GetLogin(),
+				Email: member.GetEmail(),
+			})
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		page = resp.NextPage
 	}
-	return nil
+	return allMembers, nil
 }
 
-func (h *Handler) repoDetails() error {
-	repos, _, err := h.client.Repositories.ListByOrg(context.Background(), h.config.SourceOrg.Name, nil)
-	if err != nil {
-		return err
-	}
-	for _, repo := range repos {
-		fmt.Printf("Repo: %s\n", repo.GetName())
-		fmt.Println(repo.GetName())
-		fmt.Println(repo.GetDescription())
-		fmt.Println(repo.GetURL())
-		fmt.Println(repo.GetDefaultBranch())
-		fmt.Println(repo.GetArchived())
-		fmt.Println(repo.GetPrivate())
-		fmt.Println(repo.GetPermissions())
-		fmt.Println(repo.GetOwner())
-		fmt.Println(repo.GetPushedAt())
-		repo.GetPermissions()
-		contribs, _, err := h.client.Repositories.ListContributors(context.Background(), repo.GetOwner().GetLogin(), repo.GetName(), nil)
+func (h *Handler) teamDetails() ([]Team, error) {
+	opts := h.githubListOptsDefaults()
+	page := 1
+	var allTeams []Team
+	for {
+		opts.Page = page
+		teams, resp, err := h.client.Teams.ListTeams(context.Background(), h.config.SourceOrg.Name, &opts)
 		if err != nil {
-			return err
-		}
-		for _, contrib := range contribs {
-			fmt.Println("--------------")
-			fmt.Println(contrib.GetLogin())
-			fmt.Println(contrib.GetID())
-			fmt.Println(contrib.GetURL())
-			fmt.Println(contrib.GetAvatarURL())
-			fmt.Println(contrib.GetType())
-			fmt.Println("--------------")
-		}
-
-		collabs, _, err := h.client.Repositories.ListCollaborators(context.Background(), repo.GetOwner().GetLogin(), repo.GetName(), nil)
-		if err != nil {
-			return err
-		}
-		for _, collab := range collabs {
-			fmt.Println("***********")
-			fmt.Println(collab.GetLogin())
-			fmt.Println(collab.GetID())
-			fmt.Println(collab.GetURL())
-			fmt.Println(collab.GetAvatarURL())
-			fmt.Println(collab.GetType())
-			fmt.Println("***********")
-		}
-
-		teams, _, err := h.client.Repositories.ListTeams(context.Background(), repo.GetOwner().GetLogin(), repo.GetName(), nil)
-		if err != nil {
-			return err
+			return nil, err
 		}
 		for _, team := range teams {
-			fmt.Println("^^^^^^^^^^^^")
-			fmt.Println(team.GetName())
-			fmt.Println(team.GetDescription())
-			fmt.Println(team.GetURL())
-			fmt.Println(team.GetPermissions())
-			fmt.Println(team.GetParent())
-			fmt.Println("^^^^^^^^^^^^")
+			t := Team{
+				Name:        team.GetName(),
+				Description: team.GetDescription(),
+				URL:         team.GetURL(),
+				Parent:      team.GetParent().GetName(),
+			}
+			h.teamCache[t.Name] = t
+			allTeams = append(allTeams, t)
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		page = resp.NextPage
+	}
 
+	return allTeams, nil
+}
+
+func (h *Handler) orgRepos() ([]Repository, error) {
+	opts := github.RepositoryListByOrgOptions{
+		ListOptions: h.githubListOptsDefaults(),
+	}
+	page := 1
+	var allRepos []Repository
+	for {
+		opts.Page = page
+		repos, resp, err := h.client.Repositories.ListByOrg(context.Background(), h.config.SourceOrg.Name, &opts)
+		if err != nil {
+			return nil, err
+		}
+		for _, repo := range repos {
+			h.log.Debugf("Gathering Repo Details: %s", repo.GetName())
+			r := Repository{
+				Name:        repo.GetName(),
+				Description: repo.GetDescription(),
+				URL:         repo.GetURL(),
+				Private:     repo.GetPrivate(),
+				PushedAt:    repo.GetPushedAt().String(),
+			}
+			t, err := h.repoTeams(repo.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Teams = t
+
+			c, err := h.repoCollaborators(repo.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Collaborators = c
+
+			con, err := h.repoContributors(repo.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Contributors = con
+
+			allRepos = append(allRepos, r)
 		}
 
-		fmt.Println("#####")
+		if resp.NextPage == 0 {
+			break
+		}
+		page = resp.NextPage
 	}
-	return nil
+	return allRepos, nil
+}
+
+func (h *Handler) repoTeams(repo string) ([]Team, error) {
+	h.log.Debugf("Gathering Repo Teams: %s", repo)
+	opts := h.githubListOptsDefaults()
+	page := 1
+	var allTeams []Team
+	for {
+		opts.Page = page
+		teams, resp, err := h.client.Repositories.ListTeams(context.Background(), h.config.SourceOrg.Name, repo, &opts)
+		if err != nil {
+			return nil, err
+		}
+		for _, team := range teams {
+			h.log.Debugf("Gathering Repo Team Details: %s", team.GetName())
+			t := Team{
+				Name:        team.GetName(),
+				Description: team.GetDescription(),
+				URL:         team.GetURL(),
+				Parent:      team.GetParent().GetName(),
+			}
+			h.teamCache[t.Name] = t
+			allTeams = append(allTeams, t)
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		page = resp.NextPage
+	}
+
+	return allTeams, nil
+
+}
+
+func (h *Handler) repoCollaborators(repo string) ([]Member, error) {
+	h.log.Debugf("Gathering Repo Collaborators: %s", repo)
+	opts := &github.ListCollaboratorsOptions{
+		ListOptions: h.githubListOptsDefaults(),
+	}
+	page := 1
+	var allCollaborators []Member
+	for {
+		opts.Page = page
+		collaborators, resp, err := h.client.Repositories.ListCollaborators(context.Background(), h.config.SourceOrg.Name, repo, opts)
+		if err != nil {
+			return nil, err
+		}
+		for _, collaborator := range collaborators {
+			h.log.Debugf("Gathering Repo Collaborator Details: %s", collaborator.GetLogin())
+			allCollaborators = append(allCollaborators, Member{
+				Login: collaborator.GetLogin(),
+				Email: collaborator.GetEmail(),
+			})
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		page = resp.NextPage
+	}
+	return allCollaborators, nil
+}
+
+func (h *Handler) repoContributors(repo string) ([]Member, error) {
+	h.log.Debugf("Gathering Repo Contributors: %s", repo)
+	opts := &github.ListContributorsOptions{
+		ListOptions: h.githubListOptsDefaults(),
+	}
+	page := 1
+	var allContributors []Member
+	for {
+		opts.Page = page
+		contributors, resp, err := h.client.Repositories.ListContributors(context.Background(), h.config.SourceOrg.Name, repo, opts)
+		if err != nil {
+			return nil, err
+		}
+		for _, contributor := range contributors {
+			h.log.Debugf("Gathering Repo Contributor Details: %s", contributor.GetLogin())
+			allContributors = append(allContributors, Member{
+				Login: contributor.GetLogin(),
+				Email: contributor.GetEmail(),
+			})
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		page = resp.NextPage
+	}
+	return allContributors, nil
 }
