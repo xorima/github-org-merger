@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github-org-merger/internal/config"
+	"os"
+	"strings"
 
 	"github.com/google/go-github/v50/github"
 	"github.com/youshy/logger"
@@ -24,6 +26,7 @@ type OrganisationInformation struct {
 // to all teams arbitrarily
 type Organisation struct {
 	Name        string
+	FullName    string
 	Description string
 	URL         string
 	Email       string
@@ -103,8 +106,18 @@ func (h *Handler) printJson(orgInfo OrganisationInformation) {
 	if err != nil {
 		panic(err)
 	}
-	// print json
-	fmt.Println(string(j))
+	// save to disk using org name
+	h.log.Debugf("Saving JSON to disk")
+	fmt.Println(orgInfo.Organisation.Name)
+	err = h.saveJson(j, orgInfo.Organisation.Name)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (h *Handler) saveJson(json []byte, orgName string) error {
+	h.log.Debugf("Saving to file as %s", orgName)
+	return os.WriteFile(fmt.Sprintf("%s.json", orgName), json, 0644)
 }
 
 func (h *Handler) githubListOptsDefaults() github.ListOptions {
@@ -116,11 +129,13 @@ func (h *Handler) orgDetails() (Organisation, error) {
 
 	// Connect to git
 	org, _, err := h.client.Organizations.Get(context.Background(), h.config.SourceOrg.Name)
+
 	if err != nil {
 		return organisation, err
 	}
 	organisation = Organisation{
-		Name:        org.GetName(),
+		Name:        org.GetLogin(),
+		FullName:    org.GetName(),
 		Description: org.GetDescription(),
 		URL:         org.GetURL(),
 		Email:       org.GetEmail(),
@@ -249,6 +264,10 @@ func (h *Handler) repoTeams(repo string) ([]Team, error) {
 		opts.Page = page
 		teams, resp, err := h.client.Repositories.ListTeams(context.Background(), h.config.SourceOrg.Name, repo, &opts)
 		if err != nil {
+			if strings.Contains(err.Error(), "404") {
+				h.log.Warnf("No access to TEAMS for %s, this data will not be captured", repo)
+				return nil, nil
+			}
 			return nil, err
 		}
 		for _, team := range teams {
@@ -283,6 +302,10 @@ func (h *Handler) repoCollaborators(repo string) ([]Member, error) {
 		opts.Page = page
 		collaborators, resp, err := h.client.Repositories.ListCollaborators(context.Background(), h.config.SourceOrg.Name, repo, opts)
 		if err != nil {
+			if (strings.Contains(err.Error(), "404")) || (strings.Contains(err.Error(), "403")) {
+				h.log.Warnf("No access to COLLABORATORS for %s, this data will not be captured", repo)
+				return nil, nil
+			}
 			return nil, err
 		}
 		for _, collaborator := range collaborators {
