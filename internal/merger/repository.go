@@ -17,14 +17,14 @@ type Repository struct {
 	PushedAt      string
 }
 
-func (h *Handler) repoTeams(repo string) ([]Team, error) {
+func (h *Handler) repoTeams(ctx context.Context, repo string) ([]Team, error) {
 	h.log.Debugf("Gathering Repo Teams: %s", repo)
 	opts := h.githubListOptsDefaults()
 	page := 1
 	var allTeams []Team
 	for {
 		opts.Page = page
-		teams, resp, err := h.client.Repositories.ListTeams(context.Background(), h.config.SourceOrg.Name, repo, &opts)
+		teams, resp, err := h.client.Repositories.ListTeams(ctx, h.config.SourceOrg.Name, repo, &opts)
 		if err != nil {
 			if strings.Contains(err.Error(), "404") {
 				h.log.Warnf("No access to TEAMS for %s, this data will not be captured", repo)
@@ -53,7 +53,7 @@ func (h *Handler) repoTeams(repo string) ([]Team, error) {
 
 }
 
-func (h *Handler) repoCollaborators(repo string) ([]Member, error) {
+func (h *Handler) repoCollaborators(ctx context.Context, repo string) ([]Member, error) {
 	h.log.Debugf("Gathering Repo Collaborators: %s", repo)
 	opts := &github.ListCollaboratorsOptions{
 		ListOptions: h.githubListOptsDefaults(),
@@ -62,7 +62,7 @@ func (h *Handler) repoCollaborators(repo string) ([]Member, error) {
 	var allCollaborators []Member
 	for {
 		opts.Page = page
-		collaborators, resp, err := h.client.Repositories.ListCollaborators(context.Background(), h.config.SourceOrg.Name, repo, opts)
+		collaborators, resp, err := h.client.Repositories.ListCollaborators(ctx, h.config.SourceOrg.Name, repo, opts)
 		if err != nil {
 			if (strings.Contains(err.Error(), "404")) || (strings.Contains(err.Error(), "403")) {
 				h.log.Warnf("No access to COLLABORATORS for %s, this data will not be captured", repo)
@@ -85,7 +85,7 @@ func (h *Handler) repoCollaborators(repo string) ([]Member, error) {
 	return allCollaborators, nil
 }
 
-func (h *Handler) repoContributors(repo string) ([]Member, error) {
+func (h *Handler) repoContributors(ctx context.Context, repo string) ([]Member, error) {
 	h.log.Debugf("Gathering Repo Contributors: %s", repo)
 	opts := &github.ListContributorsOptions{
 		ListOptions: h.githubListOptsDefaults(),
@@ -94,7 +94,7 @@ func (h *Handler) repoContributors(repo string) ([]Member, error) {
 	var allContributors []Member
 	for {
 		opts.Page = page
-		contributors, resp, err := h.client.Repositories.ListContributors(context.Background(), h.config.SourceOrg.Name, repo, opts)
+		contributors, resp, err := h.client.Repositories.ListContributors(ctx, h.config.SourceOrg.Name, repo, opts)
 		if err != nil {
 			return nil, err
 		}

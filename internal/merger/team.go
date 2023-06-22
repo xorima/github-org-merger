@@ -9,13 +9,13 @@ type Team struct {
 	Parent      string
 }
 
-func (h *Handler) teamDetails() ([]Team, error) {
+func (h *Handler) teamDetails(ctx context.Context) ([]Team, error) {
 	opts := h.githubListOptsDefaults()
 	page := 1
 	var allTeams []Team
 	for {
 		opts.Page = page
-		teams, resp, err := h.client.Teams.ListTeams(context.Background(), h.config.SourceOrg.Name, &opts)
+		teams, resp, err := h.client.Teams.ListTeams(ctx, h.config.SourceOrg.Name, &opts)
 		if err != nil {
 			return nil, err
 		}

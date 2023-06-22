@@ -24,6 +24,7 @@ type Handler struct {
 	client    *github.Client
 	teamCache map[string]Team
 	log       *zap.SugaredLogger
+	ctx       context.Context
 }
 
 func NewHandler(config *config.Config) *Handler {
@@ -35,6 +36,7 @@ func NewHandler(config *config.Config) *Handler {
 		client:    NewGithubClientPAT(context.Background(), config.GithubToken),
 		teamCache: make(map[string]Team),
 		log:       log,
+		ctx:       context.Background(),
 	}
 
 }
@@ -43,13 +45,13 @@ func (h *Handler) Handle() {
 	h.log.Debugf("Running on Org: %s", h.config.SourceOrg.Name)
 	var orgInfo OrganisationInformation
 	h.log.Debugf("Gathering Org Details")
-	org, err := h.orgDetails()
+	org, err := h.orgDetails(h.ctx)
 	if err != nil {
 		panic(err)
 	}
 	orgInfo.Organisation = org
 	h.log.Debugf("Gathering Repo Details")
-	repos, err := h.orgRepos()
+	repos, err := h.orgRepos(h.ctx)
 	if err != nil {
 		panic(err)
 	}

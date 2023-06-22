@@ -19,11 +19,11 @@ type Organisation struct {
 	Members     []Member
 }
 
-func (h *Handler) orgDetails() (Organisation, error) {
+func (h *Handler) orgDetails(ctx context.Context) (Organisation, error) {
 	var organisation Organisation
 
 	// Connect to git
-	org, _, err := h.client.Organizations.Get(context.Background(), h.config.SourceOrg.Name)
+	org, _, err := h.client.Organizations.Get(ctx, h.config.SourceOrg.Name)
 
 	if err != nil {
 		return organisation, err
@@ -36,7 +36,7 @@ func (h *Handler) orgDetails() (Organisation, error) {
 		Email:       org.GetEmail(),
 	}
 
-	orgMembers, err := h.orgMembers()
+	orgMembers, err := h.orgMembers(ctx)
 	if err != nil {
 		return organisation, err
 	}
@@ -44,7 +44,7 @@ func (h *Handler) orgDetails() (Organisation, error) {
 	return organisation, nil
 }
 
-func (h *Handler) orgMembers() ([]Member, error) {
+func (h *Handler) orgMembers(ctx context.Context) ([]Member, error) {
 	h.log.Debugf("Gathering Org Members")
 	opts := &github.ListMembersOptions{
 		ListOptions: h.githubListOptsDefaults(),
@@ -53,7 +53,7 @@ func (h *Handler) orgMembers() ([]Member, error) {
 	var allMembers []Member
 	for {
 		opts.Page = page
-		members, resp, err := h.client.Organizations.ListMembers(context.Background(), h.config.SourceOrg.Name, opts)
+		members, resp, err := h.client.Organizations.ListMembers(ctx, h.config.SourceOrg.Name, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -72,7 +72,7 @@ func (h *Handler) orgMembers() ([]Member, error) {
 	return allMembers, nil
 }
 
-func (h *Handler) orgRepos() ([]Repository, error) {
+func (h *Handler) orgRepos(ctx context.Context) ([]Repository, error) {
 	opts := github.RepositoryListByOrgOptions{
 		ListOptions: h.githubListOptsDefaults(),
 	}
@@ -80,7 +80,7 @@ func (h *Handler) orgRepos() ([]Repository, error) {
 	var allRepos []Repository
 	for {
 		opts.Page = page
-		repos, resp, err := h.client.Repositories.ListByOrg(context.Background(), h.config.SourceOrg.Name, &opts)
+		repos, resp, err := h.client.Repositories.ListByOrg(ctx, h.config.SourceOrg.Name, &opts)
 		if err != nil {
 			return nil, err
 		}
@@ -93,19 +93,19 @@ func (h *Handler) orgRepos() ([]Repository, error) {
 				Private:     repo.GetPrivate(),
 				PushedAt:    repo.GetPushedAt().String(),
 			}
-			t, err := h.repoTeams(repo.GetName())
+			t, err := h.repoTeams(ctx, repo.GetName())
 			if err != nil {
 				return nil, err
 			}
 			r.Teams = t
 
-			c, err := h.repoCollaborators(repo.GetName())
+			c, err := h.repoCollaborators(ctx, repo.GetName())
 			if err != nil {
 				return nil, err
 			}
 			r.Collaborators = c
 
-			con, err := h.repoContributors(repo.GetName())
+			con, err := h.repoContributors(ctx, repo.GetName())
 			if err != nil {
 				return nil, err
 			}
