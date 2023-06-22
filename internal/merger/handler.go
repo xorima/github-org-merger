@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github-org-merger/internal/config"
+	"github.com/xorima/github-org-merger/internal/config"
 	"os"
 	"strings"
 

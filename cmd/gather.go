@@ -5,8 +5,8 @@ package cmd
 
 import (
 	"fmt"
-	"github-org-merger/internal/config"
-	"github-org-merger/internal/merger"
+	"github.com/xorima/github-org-merger/internal/config"
+	"github.com/xorima/github-org-merger/internal/merger"
 
 	"github.com/spf13/cobra"
 )
@@ -37,5 +37,8 @@ func init() {
 	// gatherCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	// Set the SourceOrg in the config
 	gatherCmd.Flags().StringVarP(&config.AppConfig.SourceOrg.Name, "source-org", "s", "", "The source org to migrate from")
-	gatherCmd.MarkFlagRequired("source-org")
+	err := gatherCmd.MarkFlagRequired("source-org")
+	if err != nil {
+		panic(err)
+	}
 }
