@@ -9,13 +9,14 @@ import (
 // planCmd represents the plan command
 var planCmd = &cobra.Command{
 	Use:   "plan",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Generate a plan for the migration to happen",
+	Long: `A plan of everything to migrate will be generated. This will include:
+	- Repositories
+	- Teams
+	- Users who are not in the new org
+	- Branch Protection Rules to update
+	- CodeOwners to update
+	`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("plan called")
 	},

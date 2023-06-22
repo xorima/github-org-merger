@@ -1,3 +1,6 @@
+
+
+
 module github.com/xorima/github-org-merger
 
 go 1.20
