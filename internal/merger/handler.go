@@ -77,9 +77,11 @@ func (h *Handler) Plan() {
 	// Repositories that will be migrated
 	// Repositories that have name clashes and need manual fixes.
 	type Plan struct {
+		SourceOrgName      string
+		DestinationOrgName string
+		MissingMembers     []ghub.Member
 		Teams              TeamMigration
 		TeamsRenameMapping map[string]string
-		MissingMembers     []ghub.Member
 		Repositories       RepoMigration
 	}
 	plan := Plan{
@@ -87,6 +89,8 @@ func (h *Handler) Plan() {
 		TeamsRenameMapping: teamRenames,
 		MissingMembers:     missingMembers,
 		Repositories:       repoMigration,
+		SourceOrgName:      sourceOrg.Name,
+		DestinationOrgName: destOrg.Name,
 	}
 	h.printJson(plan, fmt.Sprintf("plan-%s-%s", sourceOrg.Name, destOrg.Name))
 
