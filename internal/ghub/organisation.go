@@ -1,4 +1,4 @@
-package merger
+package ghub
 
 import (
 	"context"
@@ -12,15 +12,17 @@ import (
 // target the teams that are actually in use as opposed
 // to all teams arbitrarily
 type Organisation struct {
-	Name        string
-	FullName    string
-	Description string
-	URL         string
-	Email       string
-	Members     []Member
+	Name         string
+	FullName     string
+	Description  string
+	URL          string
+	Email        string
+	Members      []Member
+	Teams        map[string]Team
+	Repositories map[string]Repository
 }
 
-func (h *Handler) orgDetails(ctx context.Context, name string) (Organisation, error) {
+func (h *Handler) OrgDetails(ctx context.Context, name string, isSourceOrg bool) (Organisation, error) {
 	var organisation Organisation
 
 	// Connect to git
@@ -37,15 +39,23 @@ func (h *Handler) orgDetails(ctx context.Context, name string) (Organisation, er
 		Email:       org.GetEmail(),
 	}
 
-	orgMembers, err := h.orgMembers(ctx)
+	organisation.Members, err = h.orgMembers(ctx, name)
 	if err != nil {
 		return organisation, err
 	}
-	organisation.Members = orgMembers
+	organisation.Teams, err = h.teamDetails(ctx, name)
+	if err != nil {
+		return organisation, err
+	}
+	organisation.Repositories, err = h.orgRepos(ctx, name, isSourceOrg)
+	if err != nil {
+		return organisation, err
+	}
+
 	return organisation, nil
 }
 
-func (h *Handler) orgMembers(ctx context.Context) ([]Member, error) {
+func (h *Handler) orgMembers(ctx context.Context, orgName string) ([]Member, error) {
 	h.log.Debugf("Gathering Org Members")
 	opts := &github.ListMembersOptions{
 		ListOptions: h.githubListOptsDefaults(),
@@ -54,7 +64,7 @@ func (h *Handler) orgMembers(ctx context.Context) ([]Member, error) {
 	var allMembers []Member
 	for {
 		opts.Page = page
-		members, resp, err := h.clientRest.Organizations.ListMembers(ctx, h.config.SourceOrg.Name, opts)
+		members, resp, err := h.clientRest.Organizations.ListMembers(ctx, orgName, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -73,15 +83,15 @@ func (h *Handler) orgMembers(ctx context.Context) ([]Member, error) {
 	return allMembers, nil
 }
 
-func (h *Handler) orgRepos(ctx context.Context) ([]Repository, error) {
+func (h *Handler) orgRepos(ctx context.Context, orgName string, includeTeamDetails bool) (map[string]Repository, error) {
 	opts := github.RepositoryListByOrgOptions{
 		ListOptions: h.githubListOptsDefaults(),
 	}
 	page := 1
-	var allRepos []Repository
+	var allRepos = make(map[string]Repository)
 	for {
 		opts.Page = page
-		repos, resp, err := h.clientRest.Repositories.ListByOrg(ctx, h.config.SourceOrg.Name, &opts)
+		repos, resp, err := h.clientRest.Repositories.ListByOrg(ctx, orgName, &opts)
 		if err != nil {
 			return nil, err
 		}
@@ -94,13 +104,18 @@ func (h *Handler) orgRepos(ctx context.Context) ([]Repository, error) {
 				Private:     repo.GetPrivate(),
 				PushedAt:    repo.GetPushedAt().String(),
 			}
+			if !includeTeamDetails {
+				allRepos[repo.GetName()] = r
+				continue
+			}
+
 			t, err := h.repoTeams(ctx, repo.GetName())
 			fmt.Println("Teams")
 			fmt.Println(t)
 			if err != nil {
 				return nil, err
 			}
-			r.Teams = t
+			r.AccessTeams = t
 
 			c, err := h.repoCollaborators(ctx, repo.GetName())
 			if err != nil {
@@ -114,7 +129,13 @@ func (h *Handler) orgRepos(ctx context.Context) ([]Repository, error) {
 			}
 			r.Contributors = con
 
-			allRepos = append(allRepos, r)
+			protect, err := h.getBranchProtectionGroups(ctx, orgName, repo.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.ProtectedBranchBypasses = protect
+
+			allRepos[repo.GetName()] = r
 		}
 
 		if resp.NextPage == 0 {

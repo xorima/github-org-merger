@@ -1,4 +1,4 @@
-package merger
+package ghub
 
 import (
 	"context"
@@ -6,23 +6,28 @@ import (
 	"strings"
 )
 
-type Repository struct {
-	Name          string
-	Description   string
-	URL           string
-	Private       bool
-	Teams         []Team
-	Collaborators []Member
-	Contributors  []Member
-	PushedAt      string
-	BypassTeams   []ProtectionBypasses
+type AccessTeam struct {
+	Permission string
+	Slug       string
 }
 
-func (h *Handler) repoTeams(ctx context.Context, repo string) ([]Team, error) {
+type Repository struct {
+	Name                    string
+	Description             string
+	URL                     string
+	Private                 bool
+	AccessTeams             []AccessTeam
+	Collaborators           []Member
+	Contributors            []Member
+	PushedAt                string
+	ProtectedBranchBypasses []ProtectionBypasses
+}
+
+func (h *Handler) repoTeams(ctx context.Context, repo string) ([]AccessTeam, error) {
 	h.log.Debugf("Gathering Repo Teams: %s", repo)
 	opts := h.githubListOptsDefaults()
 	page := 1
-	var allTeams []Team
+	var allTeams []AccessTeam
 	for {
 		opts.Page = page
 		teams, resp, err := h.clientRest.Repositories.ListTeams(ctx, h.config.SourceOrg.Name, repo, &opts)
@@ -35,44 +40,11 @@ func (h *Handler) repoTeams(ctx context.Context, repo string) ([]Team, error) {
 		}
 		for _, team := range teams {
 
-			memberOpts := github.TeamListTeamMembersOptions{
-				ListOptions: h.githubListOptsDefaults(),
-			}
-			memberPage := 1
-			var allMembers []Member
-			for {
-				memberOpts.Page = memberPage
-				members, memberResp, err := h.clientRest.Teams.ListTeamMembersByID(ctx, team.GetOrganization().GetID(), team.GetID(), &memberOpts)
-				if err != nil {
-					if strings.Contains(err.Error(), "404") {
-						h.log.Warnf("No access to TEAM MEMBERS for %s, this data will not be captured", repo)
-						return nil, nil
-					}
-					return nil, err
-				}
-				for _, m := range members {
-					allMembers = append(allMembers, Member{
-						Login: m.GetLogin(),
-						Email: m.GetEmail(),
-					})
-				}
-				if memberResp.NextPage == 0 {
-					break
-				}
-				memberPage = memberResp.NextPage
-
-			}
-
 			h.log.Debugf("Gathering Repo Team Details: %s", team.GetName())
-			t := Team{
-				Name:        team.GetName(),
-				Description: team.GetDescription(),
-				URL:         team.GetURL(),
-				Parent:      team.GetParent().GetName(),
-				Permission:  team.Permission,
-				Members:     allMembers,
+			t := AccessTeam{
+				Slug:       teamName(team),
+				Permission: team.GetPermission(),
 			}
-			h.teamCache[t.Name] = t
 			allTeams = append(allTeams, t)
 		}
 		if resp.NextPage == 0 {
@@ -82,7 +54,6 @@ func (h *Handler) repoTeams(ctx context.Context, repo string) ([]Team, error) {
 	}
 
 	return allTeams, nil
-
 }
 
 func (h *Handler) repoCollaborators(ctx context.Context, repo string) ([]Member, error) {
@@ -143,26 +114,4 @@ func (h *Handler) repoContributors(ctx context.Context, repo string) ([]Member, 
 		page = resp.NextPage
 	}
 	return allContributors, nil
-}
-
-func (h *Handler) repoDetails(ctx context.Context, repo string) (Repository, error) {
-	h.log.Debugf("Gathering Repo Details: %s", repo)
-	repository, _, err := h.clientRest.Repositories.Get(ctx, h.config.SourceOrg.Name, repo)
-	if err != nil {
-		return Repository{}, err
-	}
-	teams, err := h.repoTeams(ctx, repo)
-	if err != nil {
-		return Repository{}, err
-	}
-	return Repository{
-		Name:          repository.GetName(),
-		Description:   repository.GetDescription(),
-		URL:           repository.GetURL(),
-		Private:       repository.GetPrivate(),
-		Teams:         teams,
-		Collaborators: nil,
-		Contributors:  nil,
-		PushedAt:      repository.GetPushedAt().String(),
-	}, nil
 }

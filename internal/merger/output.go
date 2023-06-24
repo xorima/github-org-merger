@@ -16,6 +16,7 @@ func (h *Handler) printJson(v any, name string) {
 	// save to disk using org name
 	h.log.Debugf("Saving JSON to disk")
 	fmt.Println(name)
+	fmt.Println(string(j))
 	err = h.saveJson(j, name)
 	if err != nil {
 		panic(err)

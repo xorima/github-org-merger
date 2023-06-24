@@ -35,7 +35,7 @@ func migrateFlags(cmd *cobra.Command) {
 	if err != nil {
 		panic(err)
 	}
-	cmd.Flags().StringVarP(&config.AppConfig.SingleRepository, "repository", "r", "", "The single repository to migrate (optional, this or --all-repositories must be set)")
+	//cmd.Flags().StringVarP(&config.AppConfig.SingleRepository, "repository", "r", "", "The single repository to migrate (optional, this or --all-repositories must be set)")
 	cmd.Flags().BoolVarP(&config.AppConfig.AllRepositories, "all-repositories", "a", false, "Migrate all repositories (optional, this or --repository must be set)")
 
 }

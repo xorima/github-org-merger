@@ -1,4 +1,4 @@
-package merger
+package ghub
 
 import "github.com/google/go-github/v50/github"
 
