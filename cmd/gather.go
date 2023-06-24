@@ -19,7 +19,7 @@ var gatherCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("gather called")
 		h := merger.NewHandler(config.AppConfig)
-		h.Handle()
+		h.Gather()
 	},
 }
 
@@ -36,9 +36,4 @@ func init() {
 	// is called directly, e.g.:
 	// gatherCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	// Set the SourceOrg in the config
-	gatherCmd.Flags().StringVarP(&config.AppConfig.SourceOrg.Name, "source-org", "s", "", "The source org to migrate from")
-	err := gatherCmd.MarkFlagRequired("source-org")
-	if err != nil {
-		panic(err)
-	}
 }

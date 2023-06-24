@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/xorima/github-org-merger/internal/config"
 
 	"github.com/spf13/cobra"
 )
@@ -37,4 +38,11 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// runCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	runCmd.Flags().StringVarP(&config.AppConfig.PlanFile, "plan-file", "f", "", "The plan file to use for the migration")
+	err := runCmd.MarkFlagRequired("plan-file")
+	if err != nil {
+		panic(err)
+	}
+	migrateFlags(runCmd)
+
 }

@@ -6,17 +6,17 @@ import (
 	"os"
 )
 
-func (h *Handler) printJson(orgInfo OrganisationInformation) {
+func (h *Handler) printJson(v any, name string) {
 	h.log.Debugf("Printing JSON to screen")
 	// convert to json
-	j, err := json.Marshal(orgInfo)
+	j, err := json.Marshal(v)
 	if err != nil {
 		panic(err)
 	}
 	// save to disk using org name
 	h.log.Debugf("Saving JSON to disk")
-	fmt.Println(orgInfo.Organisation.Name)
-	err = h.saveJson(j, orgInfo.Organisation.Name)
+	fmt.Println(name)
+	err = h.saveJson(j, name)
 	if err != nil {
 		panic(err)
 	}

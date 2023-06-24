@@ -7,8 +7,12 @@ import (
 var AppConfig = NewConfig()
 
 type Config struct {
-	GithubToken string
-	SourceOrg   Org
+	GithubToken      string
+	SourceOrg        Org
+	DestinationOrg   Org
+	AllRepositories  bool
+	SingleRepository string
+	PlanFile         string
 }
 
 type Org struct {
@@ -21,6 +25,8 @@ func NewConfig() *Config {
 		panic("GITHUB_TOKEN is not set")
 	}
 	return &Config{
-		GithubToken: githubToken,
+		GithubToken:     githubToken,
+		AllRepositories: false,
+		PlanFile:        "",
 	}
 }

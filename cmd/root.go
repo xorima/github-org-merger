@@ -4,6 +4,7 @@ Copyright © 2023 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"github.com/xorima/github-org-merger/internal/config"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -12,13 +13,7 @@ import (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "github-org-merger",
-	Short: "A tool to enable users to merge two orgs together into 1 single org. \nco",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "A tool to enable users to merge two orgs together into 1 single org.",
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },
@@ -43,4 +38,10 @@ func init() {
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.PersistentFlags().StringVarP(&config.AppConfig.SourceOrg.Name, "source-org", "s", "", "The source org to migrate from")
+	err := rootCmd.MarkPersistentFlagRequired("source-org")
+	if err != nil {
+		panic(err)
+	}
+
 }

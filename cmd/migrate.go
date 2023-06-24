@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
+	"github.com/xorima/github-org-merger/internal/config"
 )
 
 // migrateCmd represents the migrate command
@@ -25,4 +26,16 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// migrateCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	migrateFlags(migrateCmd)
+}
+
+func migrateFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVarP(&config.AppConfig.DestinationOrg.Name, "destination-org", "d", "", "The destination org to migrate to")
+	err := cmd.MarkFlagRequired("destination-org")
+	if err != nil {
+		panic(err)
+	}
+	cmd.Flags().StringVarP(&config.AppConfig.SingleRepository, "repository", "r", "", "The single repository to migrate (optional, this or --all-repositories must be set)")
+	cmd.Flags().BoolVarP(&config.AppConfig.AllRepositories, "all-repositories", "a", false, "Migrate all repositories (optional, this or --repository must be set)")
+
 }

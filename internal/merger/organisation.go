@@ -2,6 +2,7 @@ package merger
 
 import (
 	"context"
+	"fmt"
 	"github.com/google/go-github/v50/github"
 )
 
@@ -19,11 +20,11 @@ type Organisation struct {
 	Members     []Member
 }
 
-func (h *Handler) orgDetails(ctx context.Context) (Organisation, error) {
+func (h *Handler) orgDetails(ctx context.Context, name string) (Organisation, error) {
 	var organisation Organisation
 
 	// Connect to git
-	org, _, err := h.client.Organizations.Get(ctx, h.config.SourceOrg.Name)
+	org, _, err := h.clientRest.Organizations.Get(ctx, name)
 
 	if err != nil {
 		return organisation, err
@@ -53,7 +54,7 @@ func (h *Handler) orgMembers(ctx context.Context) ([]Member, error) {
 	var allMembers []Member
 	for {
 		opts.Page = page
-		members, resp, err := h.client.Organizations.ListMembers(ctx, h.config.SourceOrg.Name, opts)
+		members, resp, err := h.clientRest.Organizations.ListMembers(ctx, h.config.SourceOrg.Name, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -80,7 +81,7 @@ func (h *Handler) orgRepos(ctx context.Context) ([]Repository, error) {
 	var allRepos []Repository
 	for {
 		opts.Page = page
-		repos, resp, err := h.client.Repositories.ListByOrg(ctx, h.config.SourceOrg.Name, &opts)
+		repos, resp, err := h.clientRest.Repositories.ListByOrg(ctx, h.config.SourceOrg.Name, &opts)
 		if err != nil {
 			return nil, err
 		}
@@ -94,6 +95,8 @@ func (h *Handler) orgRepos(ctx context.Context) ([]Repository, error) {
 				PushedAt:    repo.GetPushedAt().String(),
 			}
 			t, err := h.repoTeams(ctx, repo.GetName())
+			fmt.Println("Teams")
+			fmt.Println(t)
 			if err != nil {
 				return nil, err
 			}
