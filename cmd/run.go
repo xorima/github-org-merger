@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/xorima/github-org-merger/internal/config"
 
 	"github.com/spf13/cobra"
 )
@@ -12,13 +13,14 @@ import (
 // runCmd represents the run command
 var runCmd = &cobra.Command{
 	Use:   "run",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "Runs the migration for the inputted plan",
+	Long: `Executes the given plan and migrates resources within it. This will include:
+	- Repositories
+	- Teams
+	- Users who are not in the new org
+	- Branch Protection Rules to update
+	- CodeOwners to update
+	`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("run called")
 	},
@@ -36,4 +38,11 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// runCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	runCmd.Flags().StringVarP(&config.AppConfig.PlanFile, "plan-file", "f", "", "The plan file to use for the migration")
+	err := runCmd.MarkFlagRequired("plan-file")
+	if err != nil {
+		panic(err)
+	}
+	migrateFlags(runCmd)
+
 }
